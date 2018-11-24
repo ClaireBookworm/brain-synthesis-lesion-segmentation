@@ -17,14 +17,16 @@ from data import pix2pix2d_loader
 
 from models import pix2pix2d
 
+from pdb import set_trace as bp
+
+
 BUFFER_SIZE = 400
 BATCH_SIZE = 1
 EPOCHS = 200
 
-
-
 PATCH_SIZE = [70, 70]
 NUM_PATCHES = 1000
+
 
 def sample_patches(input_image, generated_images, labels, sample_from):
   label_patches = []
@@ -73,20 +75,22 @@ def sample_patches(input_image, generated_images, labels, sample_from):
   return label_patches, gen_patches
 
 
-def generate_images(model, test_input, tar, epoch, train_or_test):
+def generate_images(model, test_input, tar, epoch, idx, train_or_test):
   # the training=True is intentional here since
   # we want the batch statistics while running the model
   # on the test dataset. If we use training=False, we will get
   # the accumulated statistics learned from the training dataset
   # (which we don't want)
   prediction = model(test_input, training=True)
+  
+  if not os.path.exists(FLAGS.output_file_dir):
+    os.makedirs(FLAGS.output_file_dir)
 
   if train_or_test == 'test':
     prediction_ = prediction.numpy()[0,:,:,1]
     prediction_[prediction_ > 0.5] = 1
     prediction_[prediction_ <= 0.5] = 0
-    scipy.misc.imsave(os.path.join(FLAGS.output_file_dir, epoch + '.png'), prediction_)
-    return 0
+    scipy.misc.imsave(os.path.join(FLAGS.output_file_dir, epoch + '.png'), prediction_)    
     
   plt.figure(figsize=(15,15))
 
@@ -99,12 +103,10 @@ def generate_images(model, test_input, tar, epoch, train_or_test):
     # getting the pixel values between [0, 1] to plot it.
     plt.imshow(display_list[i] * 0.5 + 0.5)
     plt.axis('off')
-
-  if not os.path.exists(FLAGS.output_file_dir):
-    os.makedirs(FLAGS.output_file_dir)
+  
   if isinstance(epoch, int):
     plt.savefig(os.path.join(FLAGS.output_file_dir,
-                'image_at_epoch_{:04d}.png'.format(epoch)))
+                'image_at_epoch_{:04d}-'.format(epoch) + str(idx) + '.png'))
   else:
     plt.savefig(os.path.join(FLAGS.output_file_dir,
                 'image_at_epoch_' + epoch + '.png'))
@@ -166,8 +168,13 @@ def train(dataset, test_dataset, epochs, generator, discriminator,
 
     if epoch % 1 == 0:
         #clear_output(wait=True)
-        for inp, tar in test_dataset.take(1):
-          generate_images(generator, inp, tar, epoch, FLAGS.train_or_test)
+        idx = 0
+        for inp, tar in test_dataset.take(10):
+          if tf.equal(tf.size(tf.where(tf.greater_equal(tar, 0))), 0):
+            pass
+          else:
+            generate_images(generator, inp, tar, epoch, idx, FLAGS.train_or_test)
+            idx += 1
 
     # saving (checkpoint) the model every 20 epochs
     if (epoch + 1) % 20 == 0:
@@ -185,6 +192,8 @@ def main(_):
 
   _listAB = list(zip(listA, listB))
   random.shuffle(_listAB)
+  if FLAGS.use_partial_data:
+    _listAB = _listAB[:1000]
 
   if FLAGS.test_data_dir_A == 'None':
     _trainC = _listAB[:int(np.round(len(_listAB)*0.9))]
@@ -250,7 +259,7 @@ def main(_):
       fprefix = 'FINAL_' + str(idx)
     else:
       fprefix = t_listA[idx].split('/')[-1][:-4]
-    generate_images(generator, inp, tar, fprefix, FLAGS.train_or_test)
+    generate_images(generator, inp, tar, fprefix, -1, FLAGS.train_or_test)
 
 
 if __name__ == "__main__":
@@ -278,5 +287,7 @@ if __name__ == "__main__":
      "restore_checkpoints", default=False, help='whether to restore a checkpoint')
   flags.DEFINE_boolean(
      "swap_noise_imB_channel_13", default=False, help='whether to swap and add noise to the 1,3 channels of imageB')
+  flags.DEFINE_boolean(
+     "use_partial_data", default=False, help='whether to use only part of the training data (1000 samples)')
   FLAGS = flags.FLAGS
   tf.app.run(main)
