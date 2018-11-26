@@ -170,7 +170,7 @@ def train(dataset, test_dataset, epochs, generator, discriminator,
         #clear_output(wait=True)
         idx = 0
         for inp, tar in test_dataset.take(10):
-          if FLAGS.is_binary_segmentation and tf.equal(tf.size(tf.where(tf.greater_equal(tar, 0))), 0):
+          if FLAGS.save_slides_with_lesion_only and tf.equal(tf.size(tf.where(tf.greater_equal(tar, 0))), 0):
             pass
           else:
             generate_images(generator, inp, tar, epoch, idx, FLAGS.train_or_test)
@@ -290,6 +290,6 @@ if __name__ == "__main__":
   flags.DEFINE_boolean(
      "use_partial_data", default=False, help='whether to use only part of the training data (1000 samples)')
   flags.DEFINE_boolean(
-     "is_binary_segmentation", default=False, help='whether the task is to generate a binary segmentation')
+     "save_slides_with_lesion_only", default=False, help='whether the task is to generate a binary segmentation')
   FLAGS = flags.FLAGS
   tf.app.run(main)
